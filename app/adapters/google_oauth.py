@@ -71,6 +71,20 @@ def _pretty_model(key: str) -> str:
     return key.split("/", 1)[-1] if "/" in key else key
 
 
+def _first(d: dict, *keys):
+    """Return the first non-None value for any of `keys` in `d`.
+
+    cloudcode-pa mixes camelCase (`remainingFraction`, `bucketId`) and snake_case
+    (`remaining_fraction`, `bucket_id`) across Antigravity versions; this helper
+    lets a single read tolerate both shapes.
+    """
+    for k in keys:
+        v = d.get(k)
+        if v is not None:
+            return v
+    return None
+
+
 class GoogleOAuthAdapter(QuotaAdapter):
     async def fetch_quota(self, ch: ChannelConfig, client: httpx.AsyncClient) -> QuotaResult:
         if not ch.api_key:
@@ -143,8 +157,8 @@ class GoogleOAuthAdapter(QuotaAdapter):
         skipped_groups: list[str] = []
 
         for g in groups_in:
-            label = _short_group_label(g.get("displayName") or "")
-            buckets_in = g.get("buckets") or []
+            label = _short_group_label(_first(g, "displayName", "display_name") or "")
+            buckets_in = g.get("buckets") or _first(g, "bucket_infos") or []
             if not buckets_in:
                 skipped_groups.append(f"{label}:no_buckets")
                 continue
@@ -154,24 +168,32 @@ class GoogleOAuthAdapter(QuotaAdapter):
             skipped_buckets: list[str] = []
 
             for b in buckets_in:
-                remaining_obj = b.get("remaining") or {}
-                remaining = remaining_obj.get("remainingFraction")
+                # cloudcode-pa returns remainingFraction flat on the bucket (or under
+                # `remaining` in older shapes), and may use snake_case. Try flat first,
+                # then the nested wrapper, accepting either casing.
+                remaining = _first(b, "remainingFraction", "remaining_fraction") or _first(
+                    (b.get("remaining") or {}), "remainingFraction", "remaining_fraction"
+                )
                 if remaining is None:
-                    bid = b.get("bucketId") or b.get("displayName") or "?"
+                    bid = (
+                        _first(b, "bucketId", "bucket_id")
+                        or _first(b, "displayName", "display_name")
+                        or "?"
+                    )
                     # Log the bucket's actual shape so we can see what OAuth
-                    # path actually returns (CodexBar docs warn that OAuth
-                    # retrieveUserQuotaSummary uses a model-bucket shape,
-                    # not Antigravity 2.x's {remaining: {remainingFraction}}.
-                    skipped_buckets.append(f"{bid}:remaining_keys={list(remaining_obj.keys()) or 'null'}")
+                    # path actually returns if the schema drifts again.
+                    skipped_buckets.append(f"{bid}:keys={list(b.keys()) or 'null'}")
                     continue
                 frac = float(remaining)
                 used = (1.0 - frac) * 100.0
                 buckets_out.append(
                     BucketQuota(
-                        label=_short_bucket_label(b.get("displayName") or ""),
+                        label=_short_bucket_label(
+                            _first(b, "displayName", "display_name") or ""
+                        ),
                         percent=round(used, 1),
-                        reset_time=(b.get("resetTime") or "") or None,
-                        description=b.get("description"),
+                        reset_time=_first(b, "resetTime", "reset_time") or None,
+                        description=_first(b, "description"),
                     )
                 )
                 if group_used is None or used > group_used:
@@ -199,6 +221,11 @@ class GoogleOAuthAdapter(QuotaAdapter):
 
         if not groups_out:
             log.warning("Antigravity summary: no usable quota after parsing. all skipped=%s", skipped_groups)
+            log.warning(
+                "Antigravity summary body shape unexpected: top_keys=%s groups=%d",
+                list(body.keys()),
+                len(groups_in),
+            )
             return None
 
         return self._ok(ch, percent=overall_used, groups=groups_out, unit="%")
