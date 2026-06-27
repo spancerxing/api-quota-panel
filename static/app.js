@@ -187,20 +187,20 @@ function groupCardHTML(r, head, updated) {
     <div class="foot">${updated}</div></div>`;
 }
 
-// One bucket row: optional label + bar + sub-text (重置时间 YYYY-MM-DD).
-// Percent is already shown on the bar (group-percent), so the sub-text just
-// carries the reset date — same wording as the single-bar card path.
+// One bucket row: bar + percent + sub-text (重置时间 YYYY-MM-DD · 剩余 X%).
+// No top-level "Weekly Limit" / "5h Limit" label — when 2 buckets come back
+// (weekly + 5h), they stack as compact rows and the reset date itself
+// distinguishes them (weekly reset vs 5h reset).
 function bucketRowHTML(b) {
   const lvl = levelFor(b.percent);
+  const remaining = Math.max(0, 100 - b.percent);
   const resetDate = fmtResetDate(b.reset_time);
-  const labelHTML = b.label ? `<div class="bucket-label">${escapeHtml(b.label)}</div>` : "";
   return `<div class="bucket">
-    ${labelHTML}
     <div class="group-bar-row">
       <div class="bar"><div class="bar-fill ${lvl}" style="width:${Math.min(100, b.percent)}%"></div></div>
       <span class="group-percent">${Number(b.percent).toFixed(2)}%</span>
     </div>
-    <div class="sub group-sub">${resetDate ? `重置时间 ${escapeHtml(resetDate)}` : "—"}</div>
+    <div class="sub group-sub">${resetDate ? `重置时间 ${escapeHtml(resetDate)} · ` : ""}剩余 ${remaining.toFixed(2)}%</div>
   </div>`;
 }
 
