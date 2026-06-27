@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>API 额度面板</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <main id="app">
+    <!-- Login -->
+    <section id="login-view" class="view hidden">
+      <form id="login-form" class="login-card">
+        <h1>API 额度面板</h1>
+        <p class="muted">请输入访问密码</p>
+        <input id="password" type="password" placeholder="密码" autocomplete="current-password" required />
+        <button id="login-btn" type="submit">登录</button>
+        <p id="login-error" class="error hidden"></p>
+      </form>
+    </section>
+
+    <!-- Dashboard -->
+    <section id="dash-view" class="view hidden">
+      <header class="topbar">
+        <h1>API 额度面板</h1>
+        <div class="actions">
+          <span id="last-updated" class="muted"></span>
+          <button id="logout-btn" class="ghost">退出</button>
+        </div>
+      </header>
+      <div id="banner" class="banner hidden"></div>
+      <div id="grid" class="grid"></div>
+    </section>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>

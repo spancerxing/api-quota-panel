@@ -1,0 +1,169 @@
+:root {
+  --bg: #f5f6f8;
+  --card: #ffffff;
+  --text: #1f2329;
+  --muted: #8a9099;
+  --border: #e6e8eb;
+  --good: #2f9e44;
+  --warn: #f59f00;
+  --danger: #e03131;
+  --accent: #1c7ed6;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14161a;
+    --card: #1c2026;
+    --text: #e9ecef;
+    --muted: #868e96;
+    --border: #2a2f36;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Microsoft YaHei", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+.hidden { display: none !important; }
+#app { max-width: 1200px; margin: 0 auto; padding: 24px; }
+
+/* login */
+.login-card {
+  max-width: 360px;
+  margin: 80px auto;
+  padding: 32px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.login-card h1 { margin: 0; font-size: 20px; }
+.login-card input {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+}
+.login-card button {
+  padding: 10px;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+/* topbar */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.topbar h1 { margin: 0; font-size: 22px; }
+.actions { display: flex; align-items: center; gap: 12px; }
+button { cursor: pointer; }
+#refresh-btn, #logout-btn {
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  font-size: 13px;
+}
+#logout-btn.ghost { color: var(--muted); }
+
+.banner {
+  background: #fff5f5;
+  color: var(--danger);
+  border: 1px solid #ffd0d0;
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 13px;
+}
+
+/* grid + cards */
+.grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  border-radius: 12px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.card.muted { opacity: 0.6; }
+.card.error { border-left-color: var(--danger); }
+.card.good { border-left-color: var(--good); }
+.card.warn { border-left-color: var(--warn); }
+.card.danger { border-left-color: var(--danger); }
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.head-right { display: flex; align-items: center; gap: 6px; }
+.label { font-weight: 600; font-size: 15px; }
+.badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; }
+.b-ok { background: #e7f5ee; color: var(--good); }
+.b-error { background: #ffe3e3; color: var(--danger); }
+.b-unsupported { background: #e9ecef; color: var(--muted); }
+.card-refresh {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color .15s, border-color .15s, background .15s;
+}
+.card-refresh:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: rgba(28, 126, 214, 0.08);
+}
+.card-refresh:disabled { cursor: progress; opacity: 0.6; }
+.card-refresh.loading { animation: card-refresh-spin 0.9s linear infinite; }
+@keyframes card-refresh-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.metric { font-size: 28px; font-weight: 700; }
+.metric .unit { font-size: 14px; font-weight: 400; color: var(--muted); margin-left: 4px; }
+.bar {
+  height: 6px;
+  background: var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.bar-fill { height: 100%; }
+.bar-fill.good { background: var(--good); }
+.bar-fill.warn { background: var(--warn); }
+.bar-fill.danger { background: var(--danger); }
+.sub { font-size: 13px; color: var(--muted); word-break: break-word; }
+.err-text { color: var(--danger); }
+.foot { font-size: 11px; color: var(--muted); margin-top: 4px; }
+.empty { color: var(--muted); padding: 40px 0; text-align: center; }
