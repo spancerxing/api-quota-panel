@@ -87,6 +87,18 @@ function fmtUntilReset(rt) {
   return `${h}h ${m}m`;
 }
 
+// Format reset hint as an absolute UTC date (YYYY-MM-DD). Used for the Antigravity
+// weekly bucket row — the API gives an ISO 8601 timestamp; we want the date only,
+// not "Xh Ym" relative phrasing. UTC matches the API's reset timestamp semantics.
+function fmtResetDate(rt) {
+  const d = parseResetTime(rt);
+  if (!d) return "";
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 function cardHTML(r) {
   const updated = new Date(r.updated_at).toLocaleString("zh-CN");
   const head = `<div class="head"><span class="label">${escapeHtml(r.label)}</span>` +
@@ -123,8 +135,8 @@ function cardHTML(r) {
       : "—";
   } else if (r.percent != null) {
     primary = `${Number(r.percent).toFixed(1)}<span class="unit">% 已用</span>`;
-    const resetDate = parseResetTime(r.reset_time);
-    sub = resetDate ? `下次重置 ${resetDate.toLocaleString("zh-CN")}` : "—";
+    const resetDate = fmtResetDate(r.reset_time);
+    sub = resetDate ? `重置时间 ${resetDate}` : "—";
   } else {
     primary = "—";
     sub = "—";
@@ -175,20 +187,20 @@ function groupCardHTML(r, head, updated) {
     <div class="foot">${updated}</div></div>`;
 }
 
-// One bucket row: optional label + bar + sub-text (description · reset · remaining).
+// One bucket row: optional label + bar + sub-text (重置时间 YYYY-MM-DD).
+// Percent is already shown on the bar (group-percent), so the sub-text just
+// carries the reset date — same wording as the single-bar card path.
 function bucketRowHTML(b) {
   const lvl = levelFor(b.percent);
-  const remaining = Math.max(0, 100 - b.percent);
-  const resetTxt = fmtUntilReset(b.reset_time);
+  const resetDate = fmtResetDate(b.reset_time);
   const labelHTML = b.label ? `<div class="bucket-label">${escapeHtml(b.label)}</div>` : "";
-  const descHTML = b.description ? `<span class="bucket-desc">${escapeHtml(b.description)}</span> · ` : "";
   return `<div class="bucket">
     ${labelHTML}
     <div class="group-bar-row">
       <div class="bar"><div class="bar-fill ${lvl}" style="width:${Math.min(100, b.percent)}%"></div></div>
       <span class="group-percent">${Number(b.percent).toFixed(2)}%</span>
     </div>
-    <div class="sub group-sub">${descHTML}${resetTxt ? `Refreshes in ${escapeHtml(resetTxt)} · ` : ""}${remaining.toFixed(0)}% remaining</div>
+    <div class="sub group-sub">${resetDate ? `重置时间 ${escapeHtml(resetDate)}` : "—"}</div>
   </div>`;
 }
 

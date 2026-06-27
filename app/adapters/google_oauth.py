@@ -145,7 +145,6 @@ class GoogleOAuthAdapter(QuotaAdapter):
         for base in self._base_urls(ch):
             url = f"{base.rstrip('/')}/{path}"
             resp = await client.post(url, json=payload, headers=headers)
-            self._dump_response(path, base, resp)
 
             if resp.status_code == 401 and ch.refresh_token and not refreshed_this_call:
                 try:
@@ -154,7 +153,6 @@ class GoogleOAuthAdapter(QuotaAdapter):
                     headers["Authorization"] = f"Bearer {ch.api_key}"
                     refreshed_this_call = True
                     resp = await client.post(url, json=payload, headers=headers)
-                    self._dump_response(path, base, resp, refreshed=True)
                 except Exception as exc:
                     log.warning("Antigravity token refresh failed: %s", exc)
                     return None
@@ -178,39 +176,6 @@ class GoogleOAuthAdapter(QuotaAdapter):
         if ch.base_url:
             return [ch.base_url]
         return list(ANTIGRAVITY_BASE_URLS)
-
-    @staticmethod
-    def _dump_response(path: str, base: str, resp: httpx.Response, refreshed: bool = False) -> None:
-        """Log status + top-level keys + truncated body for diagnosis.
-
-        No Authorization headers are logged. Body is truncated to 4 KiB so a
-        runaway response can't flood the log.
-        """
-        try:
-            body = resp.json()
-        except Exception:
-            log.warning(
-                "Antigravity %s@%s: status=%d body=<not JSON> text[:200]=%r%s",
-                path,
-                base,
-                resp.status_code,
-                resp.text[:200],
-                " (post-refresh)" if refreshed else "",
-            )
-            return
-        top_keys = list(body.keys())[:20]
-        import json as _json
-
-        body_str = _json.dumps(body, ensure_ascii=False)[:4096]
-        log.info(
-            "Antigravity %s@%s: status=%d top_keys=%s body[:4096]=%s%s",
-            path,
-            base,
-            resp.status_code,
-            top_keys,
-            body_str,
-            " (post-refresh)" if refreshed else "",
-        )
 
     def _parse_summary(self, ch: ChannelConfig, body: dict) -> QuotaResult | None:
         """Parse the Antigravity 2.x summary shape. Returns None if the
@@ -246,18 +211,12 @@ class GoogleOAuthAdapter(QuotaAdapter):
                     remaining = _first(
                         (b.get("remaining") or {}), "remainingFraction", "remaining_fraction"
                     )
-                bid = _first(b, "bucketId", "bucket_id") or _first(b, "displayName", "display_name") or "?"
-                rt = _first(b, "resetTime", "reset_time")
-                log.info(
-                    "Antigravity bucket %r: remaining=%r (raw keys=%s) resetTime=%r",
-                    bid,
-                    remaining,
-                    list(b.keys()),
-                    rt,
-                )
                 if remaining is None:
-                    # Log the bucket's actual shape so we can see what OAuth
-                    # path actually returns if the schema drifts again.
+                    bid = (
+                        _first(b, "bucketId", "bucket_id")
+                        or _first(b, "displayName", "display_name")
+                        or "?"
+                    )
                     skipped_buckets.append(f"{bid}:keys={list(b.keys()) or 'null'}")
                     continue
                 frac = float(remaining)
@@ -297,11 +256,6 @@ class GoogleOAuthAdapter(QuotaAdapter):
 
         if not groups_out:
             log.warning("Antigravity summary: no usable quota after parsing. all skipped=%s", skipped_groups)
-            log.warning(
-                "Antigravity summary body shape unexpected: top_keys=%s groups=%d",
-                list(body.keys()),
-                len(groups_in),
-            )
             return None
 
         return self._ok(ch, percent=overall_used, groups=groups_out, unit="%")
