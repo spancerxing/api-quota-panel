@@ -169,7 +169,7 @@ python check.py SILICONFLOW
 python check.py all
 
 # Run dev server
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --port 9876
 
 # After editing .env manually, restart the container (env_file is not hot-reloaded)
 docker compose restart panel

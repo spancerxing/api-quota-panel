@@ -60,7 +60,7 @@ class Settings:
         self.panel_password_hash: Optional[str] = os.getenv("PANEL_PASSWORD_HASH") or None
         self.panel_session_secret: str = os.getenv("PANEL_SESSION_SECRET", "")
         self.panel_cookie_secure: bool = _bool(os.getenv("PANEL_COOKIE_SECURE"), False)
-        self.port: int = int(os.getenv("PORT", "8000"))
+        self.port: int = int(os.getenv("PORT", "9876"))
         self.cache_ttl: int = int(os.getenv("CACHE_TTL_SECONDS", "120"))
         self.adapter_timeout: float = float(os.getenv("ADAPTER_TIMEOUT_SECONDS", "10"))
         self.channels: list[ChannelConfig] = self._build_channels()

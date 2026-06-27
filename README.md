@@ -40,8 +40,8 @@ python check.py all        # 并行拉取全部已启用渠道
 python check.py SILICONFLOW
 
 # 启动
-uvicorn app.main:app --reload --port 8000
-# 浏览器打开 http://localhost:8000 ，输入密码
+uvicorn app.main:app --reload --port 9876
+# 浏览器打开 http://localhost:9876 ，输入密码
 ```
 
 ## 配置（.env）
@@ -68,7 +68,7 @@ uvicorn app.main:app --reload --port 8000
 | `PANEL_PASSWORD` / `PANEL_PASSWORD_HASH` | 登录密码（hash 用 `sha256(password)`） | — |
 | `PANEL_SESSION_SECRET` | 64 字符 session 签名密钥 | 临时随机（重启失效） |
 | `PANEL_COOKIE_SECURE` | HTTPS 后端设为 `true` | `false` |
-| `PORT` | HTTP 端口 | `8000` |
+| `PORT` | HTTP 端口 | `9876` |
 | `CACHE_TTL_SECONDS` | 单渠道缓存 TTL | `120` |
 | `ADAPTER_TIMEOUT_SECONDS` | 单 HTTP 请求超时 | `10` |
 | `PANEL_ENV_FILE` | `.env` 路径（用于 token 持久化） | `.env` |
@@ -113,8 +113,8 @@ uvicorn app.main:app --reload --port 8000
 ```bash
 cp example.env .env   # 填好密钥
 docker compose up --build -d
-# 打开 http://localhost:8000
-curl http://localhost:8000/api/health   # {"status":"ok"}
+# 打开 http://localhost:9876
+curl http://localhost:9876/api/health   # {"status":"ok"}
 docker compose down
 ```
 

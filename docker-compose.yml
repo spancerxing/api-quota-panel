@@ -1,9 +1,9 @@
 services:
   panel:
-    image: api-quota-panel:latest
+    image: ghcr.io/spancerxing/api-quota-panel:latest
     # build: .          # uncomment for local rebuild
     ports:
-      - "8000:8000"
+      - "9876:9876"
     env_file:
       - .env
     restart: unless-stopped
