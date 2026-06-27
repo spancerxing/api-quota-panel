@@ -87,16 +87,23 @@ function fmtUntilReset(rt) {
   return `${h}h ${m}m`;
 }
 
-// Format reset hint as an absolute UTC date (YYYY-MM-DD). Used for the Antigravity
-// weekly bucket row — the API gives an ISO 8601 timestamp; we want the date only,
-// not "Xh Ym" relative phrasing. UTC matches the API's reset timestamp semantics.
+// Format reset hint as `YYYY-MM-DD HH:MM:SS` (UTC) when a time-of-day is
+// present, falling back to `YYYY-MM-DD` if the source only carries a date
+// (e.g. a `2026-07-01` ISO date or a midnight-UTC timestamp). UTC matches
+// the API's reset timestamp semantics, so it doesn't shift across viewer
+// timezones.
 function fmtResetDate(rt) {
   const d = parseResetTime(rt);
   if (!d) return "";
   const y = d.getUTCFullYear();
   const m = String(d.getUTCMonth() + 1).padStart(2, "0");
   const day = String(d.getUTCDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  const h = d.getUTCHours();
+  const min = d.getUTCMinutes();
+  const sec = d.getUTCSeconds();
+  const datePart = `${y}-${m}-${day}`;
+  if (h === 0 && min === 0 && sec === 0) return datePart;
+  return `${datePart} ${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
 }
 
 function cardHTML(r) {
