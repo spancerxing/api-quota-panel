@@ -131,27 +131,33 @@ class GoogleOAuthAdapter(QuotaAdapter):
         return resp
 
     def _parse_summary(self, ch: ChannelConfig, body: dict) -> QuotaResult | None:
-        """Parse the Antigravity 2.x summary shape. Returns None if it's an
-        availability probe (all 100%) or no groups matched."""
-        groups_in = body.get("groups") or []
+        """Parse the Antigravity 2.x summary shape. Returns None if the
+        response doesn't have the expected groups/buckets shape."""
+        groups_in = body.get("groups")
         if not groups_in:
+            log.warning("Antigravity summary: no 'groups' field. body keys=%s", list(body.keys())[:10])
             return None
 
         groups_out: list[GroupQuota] = []
         overall_used: float | None = None
+        skipped_groups: list[str] = []
 
         for g in groups_in:
             label = _short_group_label(g.get("displayName") or "")
             buckets_in = g.get("buckets") or []
             if not buckets_in:
+                skipped_groups.append(f"{label}:no_buckets")
                 continue
 
             buckets_out: list[BucketQuota] = []
             group_used: float | None = None
+            skipped_buckets: list[str] = []
 
             for b in buckets_in:
                 remaining = (b.get("remaining") or {}).get("remainingFraction")
                 if remaining is None:
+                    bid = b.get("bucketId") or b.get("displayName") or "?"
+                    skipped_buckets.append(bid)
                     continue
                 frac = float(remaining)
                 used = (1.0 - frac) * 100.0
@@ -167,17 +173,15 @@ class GoogleOAuthAdapter(QuotaAdapter):
                     group_used = used
 
             if not buckets_out:
+                skipped_groups.append(f"{label}:skipped_buckets={skipped_buckets}")
                 continue
 
-            # Pick the bucket with the smallest remaining (= highest used) for
-            # the legacy top-level percent fallback.
             tightest = max(buckets_out, key=lambda b: b.percent)
-
             groups_out.append(
                 GroupQuota(
                     label=label,
                     buckets=buckets_out,
-                    models=[],  # summary endpoint doesn't list member models
+                    models=[],
                     percent=tightest.percent,
                     reset_time=tightest.reset_time,
                 )
@@ -185,16 +189,11 @@ class GoogleOAuthAdapter(QuotaAdapter):
             if overall_used is None or tightest.percent > overall_used:
                 overall_used = tightest.percent
 
-        if not groups_out:
-            return None
+        if skipped_groups:
+            log.info("Antigravity summary: skipped groups: %s", skipped_groups)
 
-        # Availability probe: every bucket 100% remaining (= 0% used) across all
-        # groups → this is an availability-style payload, not real quota. Fall
-        # through to fetchAvailableModels to let the legacy endpoint decide.
-        all_full = all(
-            all(b.percent == 0 for b in g.buckets) for g in groups_out
-        )
-        if all_full:
+        if not groups_out:
+            log.warning("Antigravity summary: no usable quota after parsing. all skipped=%s", skipped_groups)
             return None
 
         return self._ok(ch, percent=overall_used, groups=groups_out, unit="%")
