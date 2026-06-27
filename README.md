@@ -18,7 +18,7 @@ Python + FastAPI 后端 + 原生 JS 前端（无构建），可打包成 Docker 
 | `siliconflow` | 硅基流动 | API key (Bearer) | `GET /v1/user/info` | `data.totalBalance` (CNY) |
 | `openai-relay` | 任意 OpenAI 兼容中转 | API key (Bearer) | `GET /v1/dashboard/billing/subscription` + `/usage` | `hard_limit_usd - total_usage/100` (USD) |
 | `codex-web` | Codex (ChatGPT Web) | OAuth access_token (Bearer) | `GET /backend-api/wham/usage` | `rate_limit.primary_window.used_percent` → 剩余 % |
-| `google-oauth` | Antigravity CLI | Google OAuth access_token (Bearer) | `POST /v1internal:fetchAvailableModels` | `models[].quotaInfo.remainingFraction` → 剩余 % |
+| `google-oauth` | Antigravity CLI | Google OAuth access_token (Bearer) | `POST /v1internal:retrieveUserQuotaSummary` | `groups[].buckets[].remaining.remainingFraction` → USED % |
 | `pioneer` | Pioneer.ai | API key (X-API-Key) | `GET /billing/plan-info`（备 `/billing/billing-status`） | `remaining_credits` / `total_usage` / `credit_limit`（USD，接口返回「分」自动 /100） |
 | `unsupported` | — | — | — | 显示「暂不支持查询」 |
 

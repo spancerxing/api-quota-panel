@@ -166,7 +166,7 @@ button { cursor: pointer; }
 
 /* multi-group card (e.g. Antigravity) */
 .groups { display: flex; flex-direction: column; gap: 14px; margin-top: 2px; }
-.group { display: flex; flex-direction: column; gap: 4px; }
+.group { display: flex; flex-direction: column; gap: 6px; }
 .group-head {
   display: flex;
   align-items: baseline;
@@ -189,7 +189,15 @@ button { cursor: pointer; }
   color: var(--muted);
   line-height: 1.5;
   word-break: break-word;
+  margin-bottom: 2px;
 }
+.bucket { display: flex; flex-direction: column; gap: 4px; margin-top: 2px; }
+.bucket-label {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 500;
+}
+.bucket-desc { color: var(--muted); }
 .group-bar-row { display: flex; align-items: center; gap: 10px; }
 .group-bar-row .bar { flex: 1; }
 .group-sub { font-size: 12px; }

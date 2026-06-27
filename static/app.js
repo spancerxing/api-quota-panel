@@ -140,32 +140,56 @@ function cardHTML(r) {
 }
 
 // Multi-group card (Antigravity CLI /usage style).
-// r.groups: [{ label, percent, reset_time, models: [...] }]
+// r.groups: [{ label, models: [...], buckets?: [...], percent?, reset_time? }]
+//   - New Antigravity 2.x shape: g.buckets has one entry per time window
+//     (e.g. Weekly + 5h Session); each bucket gets its own bar.
+//   - Legacy shape (no buckets): g.percent/g.reset_time drives a single bar.
 // Top-level r.percent drives the card border color (max USED across groups).
 function groupCardHTML(r, head, updated) {
   const cardLevel = levelFor(r.percent);
   const groupsHTML = r.groups.map((g) => {
-    const lvl = levelFor(g.percent);
-    const remaining = Math.max(0, 100 - g.percent);
-    const resetTxt = fmtUntilReset(g.reset_time);
     const modelsTxt = g.models && g.models.length
       ? `Models within this group: ${g.models.map(escapeHtml).join(", ")}`
       : "";
+    let body = "";
+    if (Array.isArray(g.buckets) && g.buckets.length) {
+      body = g.buckets.map(bucketRowHTML).join("");
+    } else if (g.percent != null) {
+      body = bucketRowHTML({
+        label: "",
+        percent: g.percent,
+        reset_time: g.reset_time,
+        description: null,
+      });
+    }
     return `<div class="group">
       <div class="group-head">
         <span class="group-label">${escapeHtml(g.label.toUpperCase())} MODELS</span>
-        <span class="group-percent">${Number(g.percent).toFixed(2)}%</span>
       </div>
       ${modelsTxt ? `<div class="group-models">${modelsTxt}</div>` : ""}
-      <div class="group-bar-row">
-        <div class="bar"><div class="bar-fill ${lvl}" style="width:${Math.min(100, g.percent)}%"></div></div>
-      </div>
-      <div class="sub group-sub">${resetTxt ? `Refreshes in ${escapeHtml(resetTxt)} · ` : ""}${remaining.toFixed(0)}% remaining</div>
+      ${body}
     </div>`;
   }).join("");
   return `<div class="card ok ${cardLevel}">${head}
     <div class="groups">${groupsHTML}</div>
     <div class="foot">${updated}</div></div>`;
+}
+
+// One bucket row: optional label + bar + sub-text (description · reset · remaining).
+function bucketRowHTML(b) {
+  const lvl = levelFor(b.percent);
+  const remaining = Math.max(0, 100 - b.percent);
+  const resetTxt = fmtUntilReset(b.reset_time);
+  const labelHTML = b.label ? `<div class="bucket-label">${escapeHtml(b.label)}</div>` : "";
+  const descHTML = b.description ? `<span class="bucket-desc">${escapeHtml(b.description)}</span> · ` : "";
+  return `<div class="bucket">
+    ${labelHTML}
+    <div class="group-bar-row">
+      <div class="bar"><div class="bar-fill ${lvl}" style="width:${Math.min(100, b.percent)}%"></div></div>
+      <span class="group-percent">${Number(b.percent).toFixed(2)}%</span>
+    </div>
+    <div class="sub group-sub">${descHTML}${resetTxt ? `Refreshes in ${escapeHtml(resetTxt)} · ` : ""}${remaining.toFixed(0)}% remaining</div>
+  </div>`;
 }
 
 function render(results) {

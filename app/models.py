@@ -21,17 +21,34 @@ class ChannelConfig(BaseModel):
     project_id: Optional[str] = None  # GCP project_id (google-oauth)
 
 
+class BucketQuota(BaseModel):
+    """One time-window bucket inside a group.
+
+    Antigravity returns multiple buckets per group (Weekly + 5h Session);
+    each bucket is its own progress bar with its own reset hint.
+    """
+
+    label: str  # "Weekly Limit" / "5h Limit" / "Session"
+    percent: float  # USED 0-100 (drives bar fill + color)
+    reset_time: Optional[str] = None  # ISO 8601 duration or epoch seconds
+    description: Optional[str] = None  # provider prose like "Resets weekly on Tuesdays"
+
+
 class GroupQuota(BaseModel):
     """One sub-quota group within a multi-quota channel.
 
-    Used by adapters that return several independent quotas under a single
-    channel (e.g. Antigravity returns per-model groups: 'Gemini' + 'Claude & GPT').
+    Antigravity returns two groups (Gemini / Claude & GPT), each with one
+    or more buckets (Weekly / 5h Session). Legacy `fetchAvailableModels`
+    fallback only yields one representative row per group — exposed via
+    the top-level `percent` / `reset_time` for backward compatibility.
     """
 
     label: str  # group header, e.g. "Gemini" or "Claude & GPT"
-    percent: float  # USED 0-100 (drives bar fill + color, like top-level percent)
-    reset_time: Optional[str] = None  # provider-specific reset hint (ISO duration or timestamp)
     models: list[str] = []  # member model names displayed in the group header sub-line
+    buckets: list[BucketQuota] = []  # preferred; one bar per bucket
+    # Legacy single-bar fallback (when only fetchAvailableModels responded):
+    percent: Optional[float] = None  # USED 0-100, drives bar when buckets is empty
+    reset_time: Optional[str] = None
 
 
 class QuotaResult(BaseModel):
