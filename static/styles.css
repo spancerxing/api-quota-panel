@@ -163,6 +163,36 @@ button { cursor: pointer; }
 .bar-fill.good { background: var(--good); }
 .bar-fill.warn { background: var(--warn); }
 .bar-fill.danger { background: var(--danger); }
+
+/* multi-group card (e.g. Antigravity) */
+.groups { display: flex; flex-direction: column; gap: 14px; margin-top: 2px; }
+.group { display: flex; flex-direction: column; gap: 4px; }
+.group-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.group-label {
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.4px;
+  color: var(--text);
+}
+.group-percent {
+  font-size: 13px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.group-models {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+  word-break: break-word;
+}
+.group-bar-row { display: flex; align-items: center; gap: 10px; }
+.group-bar-row .bar { flex: 1; }
+.group-sub { font-size: 12px; }
 .sub { font-size: 13px; color: var(--muted); word-break: break-word; }
 .err-text { color: var(--danger); }
 .foot { font-size: 11px; color: var(--muted); margin-top: 4px; }

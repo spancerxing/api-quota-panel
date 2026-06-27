@@ -78,23 +78,23 @@ class CodexWebAdapter(QuotaAdapter):
         p_reset = norm_reset(primary)
         s_reset = norm_reset(secondary)
 
-        # Use primary (5h) as the main percent, show secondary as sub info
+        # Use primary (5h) as the main percent, show secondary as sub info.
+        # Convention (see app/models.py::QuotaResult.percent doc): percent = USED 0-100,
+        # drives bar width + color. The API returns used_percent (also USED), so pass through.
         if p_used is not None:
-            percent = 100.0 - p_used
             kw = {
-                "percent": percent,
+                "percent": p_used,
                 "unit": "%",
                 "used": p_used,
                 "total": 100,
                 "reset_time": p_reset,
             }
-            # Include secondary info if available (as used%, not balance)
+            # Include secondary info if available (also USED, for symmetry with primary)
             if s_used is not None:
-                kw["balance"] = round(100.0 - s_used, 1)
+                kw["balance"] = round(s_used, 1)
                 kw["unit"] = "%"
         elif s_used is not None:
-            percent = 100.0 - s_used
-            kw = {"percent": percent, "unit": "%", "used": s_used, "total": 100, "reset_time": s_reset}
+            kw = {"percent": s_used, "unit": "%", "used": s_used, "total": 100, "reset_time": s_reset}
         else:
             # No quota window data — show plan type only
             return self._ok(ch, unit="None", error=f"plan_type={plan_type}, no usage windows")

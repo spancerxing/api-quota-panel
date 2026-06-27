@@ -46,6 +46,47 @@ function fmtNum(v, unit) {
   return String(v);
 }
 
+// Parse provider-specific reset hint into a Date. Returns null on garbage.
+//   10+ digit string   → Unix timestamp in seconds (e.g. "1784886200")
+//   1-9 digit string   → relative seconds from now  (e.g. codex reset_after_seconds "3600")
+//   ISO 8601 duration  → "PT88H45M" / "PT144H6M"   (Antigravity resetTime)
+//   ISO 8601 datetime  → "2026-09-14T10:30:00Z"
+function parseResetTime(rt) {
+  if (!rt) return null;
+  if (/^\d{10,}$/.test(rt)) {
+    const d = new Date(parseInt(rt, 10) * 1000);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  if (/^\d{1,9}$/.test(rt)) {
+    return new Date(Date.now() + parseInt(rt, 10) * 1000);
+  }
+  if (/^PT/i.test(rt)) {
+    const m = /^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/.exec(rt);
+    if (m) {
+      const ms =
+        (parseInt(m[1] || "0", 10) * 3600 +
+          parseInt(m[2] || "0", 10) * 60 +
+          parseInt(m[3] || "0", 10)) *
+        1000;
+      return new Date(Date.now() + ms);
+    }
+    return null;
+  }
+  const d = new Date(rt);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+// Render "Xh Ym" / "soon" for a reset hint (Antigravity CLI style).
+function fmtUntilReset(rt) {
+  const d = parseResetTime(rt);
+  if (!d) return "";
+  const ms = d - Date.now();
+  if (ms <= 0) return "soon";
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  return `${h}h ${m}m`;
+}
+
 function cardHTML(r) {
   const updated = new Date(r.updated_at).toLocaleString("zh-CN");
   const head = `<div class="head"><span class="label">${escapeHtml(r.label)}</span>` +
@@ -67,7 +108,12 @@ function cardHTML(r) {
       <div class="foot">${updated}</div></div>`;
   }
 
-  // ok
+  // ok + groups (Antigravity-style multi-quota card)
+  if (Array.isArray(r.groups) && r.groups.length) {
+    return groupCardHTML(r, head, updated);
+  }
+
+  // ok + single flat quota (existing behavior)
   const level = levelFor(r.percent);
   let primary, sub;
   if (r.balance != null && r.unit !== "%") {
@@ -77,7 +123,8 @@ function cardHTML(r) {
       : "—";
   } else if (r.percent != null) {
     primary = `${Number(r.percent).toFixed(1)}<span class="unit">% 已用</span>`;
-    sub = r.reset_time ? `下次重置 ${new Date(r.reset_time).toLocaleString("zh-CN")}` : "—";
+    const resetDate = parseResetTime(r.reset_time);
+    sub = resetDate ? `下次重置 ${resetDate.toLocaleString("zh-CN")}` : "—";
   } else {
     primary = "—";
     sub = "—";
@@ -89,6 +136,35 @@ function cardHTML(r) {
     <div class="metric">${primary}</div>
     ${bar}
     <div class="sub">${sub}</div>
+    <div class="foot">${updated}</div></div>`;
+}
+
+// Multi-group card (Antigravity CLI /usage style).
+// r.groups: [{ label, percent, reset_time, models: [...] }]
+// Top-level r.percent drives the card border color (max USED across groups).
+function groupCardHTML(r, head, updated) {
+  const cardLevel = levelFor(r.percent);
+  const groupsHTML = r.groups.map((g) => {
+    const lvl = levelFor(g.percent);
+    const remaining = Math.max(0, 100 - g.percent);
+    const resetTxt = fmtUntilReset(g.reset_time);
+    const modelsTxt = g.models && g.models.length
+      ? `Models within this group: ${g.models.map(escapeHtml).join(", ")}`
+      : "";
+    return `<div class="group">
+      <div class="group-head">
+        <span class="group-label">${escapeHtml(g.label.toUpperCase())} MODELS</span>
+        <span class="group-percent">${Number(g.percent).toFixed(2)}%</span>
+      </div>
+      ${modelsTxt ? `<div class="group-models">${modelsTxt}</div>` : ""}
+      <div class="group-bar-row">
+        <div class="bar"><div class="bar-fill ${lvl}" style="width:${Math.min(100, g.percent)}%"></div></div>
+      </div>
+      <div class="sub group-sub">${resetTxt ? `Refreshes in ${escapeHtml(resetTxt)} · ` : ""}${remaining.toFixed(0)}% remaining</div>
+    </div>`;
+  }).join("");
+  return `<div class="card ok ${cardLevel}">${head}
+    <div class="groups">${groupsHTML}</div>
     <div class="foot">${updated}</div></div>`;
 }
 

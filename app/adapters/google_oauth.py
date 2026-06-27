@@ -9,13 +9,21 @@ Uses the same internal API as Antigravity CLI:
 
 Response: models[<name>].quotaInfo.remainingFraction (0-1) + resetTime.
 
-Filters to models named gemini-* / claude-* (same as cockpit-tools).
+The adapter groups models by family and returns one sub-quota per group
+(matching Antigravity CLI's /usage display):
+  - Gemini:         gemini-*
+  - Claude & GPT:   claude-* | gpt-*
+
+Per group, the most conservative remainingFraction (= highest USED %) is shown.
+The top-level percent is the max USED across groups so the card border color
+reflects the worst group.
+
 Token refresh is attempted automatically on 401 if REFRESH_TOKEN is configured.
 """
 
 import httpx
 
-from ..models import ChannelConfig, QuotaResult
+from ..models import ChannelConfig, GroupQuota, QuotaResult
 from ..token_refresh import refresh_google_token
 from .base import QuotaAdapter
 
@@ -23,6 +31,19 @@ DEFAULT_BASE = "https://cloudcode-pa.googleapis.com"
 FETCH_AVAILABLE_MODELS_PATH = "v1internal:fetchAvailableModels"
 # Hard-coded UA matching the Antigravity CLI.
 _DEFAULT_UA = "antigravity/cli/1.0.8 darwin/arm64"
+
+
+# (group_label, predicate(name_lower))
+# Order = display order. Edit here to change the grouping.
+_GROUPS: list[tuple[str, "callable"]] = [
+    ("Gemini", lambda n: "gemini" in n),
+    ("Claude & GPT", lambda n: "claude" in n or "gpt" in n),
+]
+
+
+def _pretty_model(key: str) -> str:
+    """models/gemini-2.5-flash → 'gemini-2.5-flash' (strip models/ prefix)."""
+    return key.split("/", 1)[-1] if "/" in key else key
 
 
 class GoogleOAuthAdapter(QuotaAdapter):
@@ -62,37 +83,48 @@ class GoogleOAuthAdapter(QuotaAdapter):
         if not models:
             return self._err(ch, "no models in response")
 
-        # Find the best model with quotaInfo.
-        # Prefer gemini/claude models; among those, pick the most conservative (lowest remainingFraction).
-        best_name = None
-        best_frac = None
-        best_reset = None
+        groups_out: list[GroupQuota] = []
+        overall_used: float | None = None  # max USED across groups (drives card border)
 
-        gemini_or_claude = lambda name: "gemini" in name.lower() or "claude" in name.lower()
-        has_found_preferred = False
+        for label, predicate in _GROUPS:
+            # Collect (remainingFraction, resetTime) for all models in this group.
+            entries: list[tuple[str, float, str]] = []
+            for name, info in models.items():
+                if not predicate(name.lower()):
+                    continue
+                qi = (info or {}).get("quotaInfo") or {}
+                frac = qi.get("remainingFraction")
+                if frac is None:
+                    continue
+                entries.append((name, float(frac), qi.get("resetTime") or ""))
 
-        for name, info in models.items():
-            qi = (info or {}).get("quotaInfo") or {}
-            frac = qi.get("remainingFraction")
-            if frac is None:
+            if not entries:
                 continue
-            frac_f = float(frac)
-            reset = qi.get("resetTime") or ""
 
-            is_preferred = gemini_or_claude(name)
-            if best_frac is None:
-                best_name, best_frac, best_reset = name, frac_f, reset
-                has_found_preferred = is_preferred
-            elif is_preferred and not has_found_preferred:
-                # First preferred model found → switch
-                best_name, best_frac, best_reset = name, frac_f, reset
-                has_found_preferred = True
-            elif is_preferred == has_found_preferred and frac_f < best_frac:
-                # Same category, record the more conservative remaining
-                best_name, best_frac, best_reset = name, frac_f, reset
+            # Most conservative = lowest remainingFraction (highest USED).
+            best_name, best_remaining, best_reset = min(entries, key=lambda e: e[1])
+            used_pct = round((1.0 - best_remaining) * 100.0, 1)
 
-        if best_frac is None:
-            return self._err(ch, f"no quotaInfo in any model; model keys={list(models.keys())[:5]}")
+            # Sorted, deduplicated member names (display only).
+            member_names = sorted({_pretty_model(n) for n, _, _ in entries})
 
-        percent = best_frac * 100.0
-        return self._ok(ch, percent=round(percent, 1), reset_time=best_reset, unit="%")
+            groups_out.append(
+                GroupQuota(
+                    label=label,
+                    percent=used_pct,
+                    reset_time=best_reset or None,
+                    models=member_names,
+                )
+            )
+
+            if overall_used is None or used_pct > overall_used:
+                overall_used = used_pct
+
+        if not groups_out:
+            return self._err(
+                ch,
+                f"no quotaInfo in any model; keys={list(models.keys())[:5]}",
+            )
+
+        # Top-level percent = max USED across groups (drives card border color).
+        return self._ok(ch, percent=overall_used, groups=groups_out, unit="%")

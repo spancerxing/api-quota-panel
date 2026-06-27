@@ -21,6 +21,19 @@ class ChannelConfig(BaseModel):
     project_id: Optional[str] = None  # GCP project_id (google-oauth)
 
 
+class GroupQuota(BaseModel):
+    """One sub-quota group within a multi-quota channel.
+
+    Used by adapters that return several independent quotas under a single
+    channel (e.g. Antigravity returns per-model groups: 'Gemini' + 'Claude & GPT').
+    """
+
+    label: str  # group header, e.g. "Gemini" or "Claude & GPT"
+    percent: float  # USED 0-100 (drives bar fill + color, like top-level percent)
+    reset_time: Optional[str] = None  # provider-specific reset hint (ISO duration or timestamp)
+    models: list[str] = []  # member model names displayed in the group header sub-line
+
+
 class QuotaResult(BaseModel):
     """Normalized quota result for one channel. Sent to the frontend as-is."""
 
@@ -37,3 +50,6 @@ class QuotaResult(BaseModel):
     reset_time: Optional[str] = None  # ISO8601 next reset
     error: Optional[str] = None
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    # Multi-quota channel sub-display (e.g. Antigravity Gemini/Claude&GPT groups).
+    # When set, frontend renders one sub-bar per group instead of the flat top-level bar.
+    groups: Optional[list[GroupQuota]] = None
