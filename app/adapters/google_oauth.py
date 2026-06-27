@@ -154,10 +154,15 @@ class GoogleOAuthAdapter(QuotaAdapter):
             skipped_buckets: list[str] = []
 
             for b in buckets_in:
-                remaining = (b.get("remaining") or {}).get("remainingFraction")
+                remaining_obj = b.get("remaining") or {}
+                remaining = remaining_obj.get("remainingFraction")
                 if remaining is None:
                     bid = b.get("bucketId") or b.get("displayName") or "?"
-                    skipped_buckets.append(bid)
+                    # Log the bucket's actual shape so we can see what OAuth
+                    # path actually returns (CodexBar docs warn that OAuth
+                    # retrieveUserQuotaSummary uses a model-bucket shape,
+                    # not Antigravity 2.x's {remaining: {remainingFraction}}.
+                    skipped_buckets.append(f"{bid}:remaining_keys={list(remaining_obj.keys()) or 'null'}")
                     continue
                 frac = float(remaining)
                 used = (1.0 - frac) * 100.0
