@@ -39,7 +39,17 @@ from .base import QuotaAdapter
 
 log = logging.getLogger(__name__)
 
-DEFAULT_BASE = "https://cloudcode-pa.googleapis.com"
+# Base URL fallback order matches CLIProxyAPI / agy CLI:
+# 1) daily non-sandbox (primary — `agy` CLI / Antigravity app use this for live quota)
+# 2) daily sandbox (legacy fallback, kept for compatibility)
+# 3) production (last resort; tends to return uninitialized remainingFraction=1)
+# See https://github.com/router-for-me/CLIProxyAPI internal/antigravity/executor
+# and ANTIGRAVITY_API_SPEC.md (opencode-antigravity-auth).
+ANTIGRAVITY_BASE_URLS: list[str] = [
+    "https://daily-cloudcode-pa.googleapis.com",
+    "https://daily-cloudcode-pa.sandbox.googleapis.com",
+    "https://cloudcode-pa.googleapis.com",
+]
 SUMMARY_PATH = "v1internal:retrieveUserQuotaSummary"
 MODELS_PATH = "v1internal:fetchAvailableModels"
 # Hard-coded UA matching the Antigravity CLI.
@@ -127,27 +137,50 @@ class GoogleOAuthAdapter(QuotaAdapter):
         path: str,
         payload: dict,
     ) -> httpx.Response | None:
-        """POST + auto-refresh on 401. Returns None if refresh itself failed."""
-        base = (ch.base_url or DEFAULT_BASE).rstrip("/")
-        url = f"{base}/{path}"
-        resp = await client.post(url, json=payload, headers=headers)
-        self._dump_response(path, resp)
+        """POST against each base URL in order. Returns the first 200 response,
+        or None if token refresh failed. On 401, refresh the token once and
+        retry that base URL; other non-200 codes fall through to the next base.
+        """
+        refreshed_this_call = False
+        for base in self._base_urls(ch):
+            url = f"{base.rstrip('/')}/{path}"
+            resp = await client.post(url, json=payload, headers=headers)
+            self._dump_response(path, base, resp)
 
-        if resp.status_code == 401 and ch.refresh_token:
-            try:
-                new = await refresh_google_token(ch.refresh_token, client)
-                ch.api_key = new["access_token"]
-                headers["Authorization"] = f"Bearer {ch.api_key}"
-                resp = await client.post(url, json=payload, headers=headers)
-                self._dump_response(path, resp, refreshed=True)
-            except Exception as exc:
-                log.warning("Antigravity token refresh failed: %s", exc)
-                return None
+            if resp.status_code == 401 and ch.refresh_token and not refreshed_this_call:
+                try:
+                    new = await refresh_google_token(ch.refresh_token, client)
+                    ch.api_key = new["access_token"]
+                    headers["Authorization"] = f"Bearer {ch.api_key}"
+                    refreshed_this_call = True
+                    resp = await client.post(url, json=payload, headers=headers)
+                    self._dump_response(path, base, resp, refreshed=True)
+                except Exception as exc:
+                    log.warning("Antigravity token refresh failed: %s", exc)
+                    return None
 
+            if resp.status_code == 200:
+                return resp
+
+            log.info(
+                "Antigravity %s@%s: status=%d, trying next base URL",
+                path,
+                base,
+                resp.status_code,
+            )
+
+        # All bases exhausted — return the last response so caller can decide.
         return resp
 
     @staticmethod
-    def _dump_response(path: str, resp: httpx.Response, refreshed: bool = False) -> None:
+    def _base_urls(ch: ChannelConfig) -> list[str]:
+        """Honour `ch.base_url` override; otherwise use the CLIProxyAPI fallback list."""
+        if ch.base_url:
+            return [ch.base_url]
+        return list(ANTIGRAVITY_BASE_URLS)
+
+    @staticmethod
+    def _dump_response(path: str, base: str, resp: httpx.Response, refreshed: bool = False) -> None:
         """Log status + top-level keys + truncated body for diagnosis.
 
         No Authorization headers are logged. Body is truncated to 4 KiB so a
@@ -157,8 +190,9 @@ class GoogleOAuthAdapter(QuotaAdapter):
             body = resp.json()
         except Exception:
             log.warning(
-                "Antigravity %s: status=%d body=<not JSON> text[:200]=%r%s",
+                "Antigravity %s@%s: status=%d body=<not JSON> text[:200]=%r%s",
                 path,
+                base,
                 resp.status_code,
                 resp.text[:200],
                 " (post-refresh)" if refreshed else "",
@@ -169,8 +203,9 @@ class GoogleOAuthAdapter(QuotaAdapter):
 
         body_str = _json.dumps(body, ensure_ascii=False)[:4096]
         log.info(
-            "Antigravity %s: status=%d top_keys=%s body[:4096]=%s%s",
+            "Antigravity %s@%s: status=%d top_keys=%s body[:4096]=%s%s",
             path,
+            base,
             resp.status_code,
             top_keys,
             body_str,
@@ -203,10 +238,14 @@ class GoogleOAuthAdapter(QuotaAdapter):
             for b in buckets_in:
                 # cloudcode-pa returns remainingFraction flat on the bucket (or under
                 # `remaining` in older shapes), and may use snake_case. Try flat first,
-                # then the nested wrapper, accepting either casing.
-                remaining = _first(b, "remainingFraction", "remaining_fraction") or _first(
-                    (b.get("remaining") or {}), "remainingFraction", "remaining_fraction"
-                )
+                # then the nested wrapper, accepting either casing. Note: `0` is a valid
+                # remainingFraction (means "no quota left, 100% used") — must NOT short-circuit
+                # through `or`, so we explicitly check `is None` between attempts.
+                remaining = _first(b, "remainingFraction", "remaining_fraction")
+                if remaining is None:
+                    remaining = _first(
+                        (b.get("remaining") or {}), "remainingFraction", "remaining_fraction"
+                    )
                 bid = _first(b, "bucketId", "bucket_id") or _first(b, "displayName", "display_name") or "?"
                 rt = _first(b, "resetTime", "reset_time")
                 log.info(
